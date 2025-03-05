@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Net;
-using System.Net.Sockets;
-using System.Collections.Generic;
-using System.Threading;
 
 namespace Server;
 
@@ -10,6 +6,7 @@ class Program
 {
     static void Main(string[] args)
     {
-        Console.WriteLine("Hello World!");
+        Server server = new Server("127.0.0.1", 3108);
+        server.Run();
     }
 }
