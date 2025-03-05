@@ -1,0 +1,14 @@
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/bin/Debug/net9.0/Server
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/bin/Debug/net9.0/Server.deps.json
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/bin/Debug/net9.0/Server.runtimeconfig.json
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/bin/Debug/net9.0/Server.dll
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/bin/Debug/net9.0/Server.pdb
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/Server.GeneratedMSBuildEditorConfig.editorconfig
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/Server.AssemblyInfoInputs.cache
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/Server.AssemblyInfo.cs
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/Server.csproj.CoreCompileInputs.cache
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/Server.dll
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/refint/Server.dll
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/Server.pdb
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/Server.genruntimeconfig.cache
+/Users/equa/Developer/UnityProjects/TCP-Test-03/Server/obj/Debug/net9.0/ref/Server.dll
