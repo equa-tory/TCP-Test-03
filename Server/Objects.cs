@@ -19,7 +19,7 @@ public static class Utils
             return string.Empty;
         }
     }
-    public static T Desirialize<T>(string data) {
+    public static T Deserialize<T>(string data) {
         try
         {
             return JsonConvert.DeserializeObject<T>(data);
@@ -44,7 +44,7 @@ public static class Utils
             else if(i == '}') brackets--;
         }
         if(brackets != 0) return null;
-        BaseMessage msg = Utils.Desirialize<BaseMessage>(messages[0]);
+        BaseMessage msg = Deserialize<BaseMessage>(messages[0]);
         return msg;
     }
 }

@@ -15,14 +15,13 @@ public class Client : MonoBehaviour
     [SerializeField] private int port = 3108;
 
     private bool isConnected = false;
-    private int connectionTimeout = 1000;
+    private int connectionTimeout = 10000;
 
     // private int clientId = -16;
 
+    private UdpClient udpClient;
     private TcpClient tcpClient;
     private NetworkStream stream;
-    
-    private UdpClient udpClient;
 
     Dictionary<string, System.Action<string>> actions = new Dictionary<string, System.Action<string>>();
     #endregion
@@ -31,9 +30,9 @@ public class Client : MonoBehaviour
     private void Awake() => Init(); // TODO: via bootstrap
     void Update() {
         if(Input.GetKeyDown(KeyCode.T))
-        {
-            UDP(Utils.CreateMessage("LOG", new Log("dwadawd")));
-        }
+            TCP("LOG", new Log("tcp test"));
+        if(Input.GetKeyDown(KeyCode.U))
+            UDP("LOG", new Log("udp test")); 
     }
     public async void Init()
     {
@@ -44,11 +43,11 @@ public class Client : MonoBehaviour
         InitActions();
         await ConnectToServer();
     }
-
     private void OnApplicationQuit() => Disconnect();
 
     private async Task<bool> ConnectToServer()
     {
+        // Tmp client for timeout
         tcpClient = new TcpClient();
         try
         {
@@ -57,24 +56,26 @@ public class Client : MonoBehaviour
             {
                 stream = tcpClient.GetStream();
                 isConnected = true;
-                Print($"[LOG] Connected to server {ip}:{port}!");
+                Debug.Log($"[LOG] Connected to server {ip}:{port}!");
 
-                Task t = new Task(ReceiveTCP); // TODO: revieve TCP
+                // TCP start recieve
+                Task t = new Task(ReceiveTCP);
                 t.Start();
 
+                // UDP start recieve
                 udpClient = new UdpClient();
                 udpClient.Connect(IPAddress.Parse(ip), port + 1);
                 udpClient.BeginReceive(new AsyncCallback(ReceiveUDP), null);
                 return true;
             }
             else {
-                Print($"[ERR] Can't connect to server {ip}:{port}");
+                Debug.LogError($"[ERR] Timeout connecting to server {ip}:{port}");
                 return false;
             }
         }
         catch(SocketException e)
         {
-            Print("[ERR] TCP Connect: " + e);
+            Debug.LogError("[ERR] TCP Connect: " + e);
             return false;
         }
     }
@@ -85,16 +86,6 @@ public class Client : MonoBehaviour
             isConnected = false;
             TcpDisconnect();
             // TODO: UdpDisconnect();
-        }
-    }
-    private void TcpDisconnect(){
-        // TCP(Utils.CreateMessage("disconnect", localPlayer));
-        try{
-            tcpClient.Client.Shutdown(SocketShutdown.Both);
-            stream?.Close();
-            tcpClient?.Close();
-        }catch(SocketException e){
-            Debug.LogError($"[ERR] TCP Disconnect: {e}");
         }
     }
     #endregion
@@ -109,21 +100,32 @@ public class Client : MonoBehaviour
             if (byteCount == 0) continue;
             string data = Encoding.UTF8.GetString(buffer, 0, byteCount);
  
-            // Debug recieved data check
-            // Debug.Log($"[Server] {data}");
+            // Debug recieved data
+            // Debug.Log($"[TCP] {data}");
 
             // Trim data if multiple messages in one
             BaseMessage msg = Utils.TrimData(data);
+            if(actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
+        }
+    }
 
-            actions.TryGetValue(msg.Type, out var action);
-            action?.Invoke(msg.Data.ToString());
+    private void TcpDisconnect()
+    {
+        // TCP("disconnect", localPlayer);
+        try{
+            tcpClient.Client.Shutdown(SocketShutdown.Both);
+            stream?.Close();
+            tcpClient?.Close();
+        }catch(SocketException e){
+            Debug.LogError($"[ERR] TCP Disconnect: {e}");
         }
     }
     
-    public void TCP(string message)
+    public void TCP(string type, object message)
     {
-        message += "\n";
-        byte[] buffer = Encoding.UTF8.GetBytes(message);
+        string data = Utils.CreateMessage(type, message);
+        data += "\n";
+        byte[] buffer = Encoding.UTF8.GetBytes(data);
         stream.Write(buffer, 0, buffer.Length);
     }
     #endregion
@@ -134,50 +136,51 @@ public class Client : MonoBehaviour
         IPEndPoint remoteEP = new IPEndPoint(IPAddress.Parse(ip), port + 1);
         byte[] data = udpClient.EndReceive(ar, ref remoteEP);
         string message = Encoding.UTF8.GetString(data);
-        //--------------------------------------------------------------------------------------------
 
-        // Debug.Log("[SERVER] UDP: " + data);
-        // playersData = Newtonsoft.Json.JsonConvert.DeserializeObject<List<PlayerData>>(message); // Update players data
+        // Debug recieved data
+        // Debug.Log($"[UDP] {data}");
 
         // Trim data if multiple messages in one
         BaseMessage msg = Utils.TrimData(message);
-        actions.TryGetValue(msg.Type, out var action);
-        action?.Invoke(msg.Data.ToString());
+        if(actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
 
-        //--------------------------------------------------------------------------------------------
-        // Снова начинаем асинхронное получение данных
+        // Start recieveng data again
         udpClient.BeginReceive(new AsyncCallback(ReceiveUDP), null);
     }
 
-    private void UDP(string message)
+    private void UdpDisconnect()
     {
-        message += "\n";
-        byte[] data = Encoding.UTF8.GetBytes(message);
-        udpClient.Send(data, data.Length);
+        // Udp("disconnect", localPlayer);
+        try{
+            udpClient.Client.Shutdown(SocketShutdown.Both);
+            udpClient?.Close();
+        }catch(SocketException e){
+            Debug.LogError($"[ERR] UDP Disconnect: {e}");
+        }
+    }
+
+    private void UDP(string type, object message)
+    {
+        string data = Utils.CreateMessage(type, message);
+        data += "\n";
+        byte[] buffer = Encoding.UTF8.GetBytes(data);
+        udpClient.Send(buffer, buffer.Length);
     }
     #endregion
 
     #region Functions
-    private void Print(string message)
+    private void InitActions()
     {
-        Debug.Log(message);
-    }
-
-    private void InitActions() {
-        actions = new Dictionary<string, System.Action<string>>
+        actions = new Dictionary<string, Action<string>>
         {
             { "LOG", Log },
-            // { "UPDATEPLAYERSLIST", UpdatePlayersList },
-            // { "CONNECTPLAYER", ConnectPlayer },
-            // { "DISCONNECTPLAYER", DisconnectPlayer },
-            // { "RPC", Rpc }
         };
     }
-    //--------------------------------------------------------------------------------------------
+
     private void Log(string data)
     {
-        Log obj = Utils.Desirialize<Log>(data);
-        Print($"[LOG] {obj.message}");
+        var obj = Utils.Deserialize<Log>(data);
+        Debug.Log($"[LOG] {obj.message}");
     }
 
     #endregion

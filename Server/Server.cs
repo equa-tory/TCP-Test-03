@@ -21,10 +21,10 @@ public class Server
     private Dictionary<int, TcpClient> tcpClients = new Dictionary<int, TcpClient>();
     private Dictionary<int, IPEndPoint> udpClients = new Dictionary<int, IPEndPoint>();
 
-    Dictionary<string, Action<string>> actions = new Dictionary<string, Action<string>>();
-
     private int nextClientId = 1;
     private object lockObj = new object();
+
+    Dictionary<string, Action<string>> actions = new Dictionary<string, Action<string>>();
 
     #endregion
     //--------------------------------------------------------------------------------------------
@@ -56,15 +56,17 @@ public class Server
     }
 
     public void Stop()
-    {
-        isRunning = false;
-        tcpListener.Stop();
-        udpListener.Close();
-        Console.Clear();
-    }
+{
+    isRunning = false;
+    tcpListener?.Stop();
+    tcpListener = null;
+    udpListener?.Close();
+    udpListener = null;
+    Console.Clear();
+}
     #endregion
     //--------------------------------------------------------------------------------------------
-    #region Accept Threads
+    #region Threads
     private void TcpAcceptThread()
     {
         while(isRunning)
@@ -75,54 +77,13 @@ public class Server
 
             Console.WriteLine($"[TCP] Connection from {client.Client.RemoteEndPoint}");
 
-            // DirectTcp(Utils.CreateMessage("ID", clientId), client);
+            // DirectTcp(Utils.CreateMessage("ID", clientId), client); // Send ID for UDP secure check
 
             Thread thread = new Thread(() => HandleClient(client));
             thread.Start();
         }
     }
     
-    private void UdpAcceptThread()
-    {
-        while(isRunning)
-        {
-            IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, 7778);
-
-            // Registration (add if need secure check)
-            int clientId = -16;
-            lock (lockObj)
-            {
-                // if(!tcpClients.ContainsKey(id)) // id
-                //     return;
-                // else udpClients[id] = endPoint;
-                if(!udpClients.ContainsValue(endPoint))
-                {
-                    clientId = nextClientId++;
-                    udpClients[clientId] = endPoint;
-                }
-                else {
-                    clientId = udpClients.FirstOrDefault(x => x.Value.Equals(endPoint)).Key;
-                }
-                
-            }
-
-            byte[] data = udpListener.Receive(ref endPoint);
-            string message = Encoding.UTF8.GetString(data);
-            BroadcastUDP(data, clientId);
-
-            // Debug recieved data check
-            // Console.WriteLine($"[UDP] {endPoint} DATA: {message}");
-
-            // Trim data if multiple messages in one
-            BaseMessage msg = Utils.TrimData(message);
-            actions.TryGetValue(msg.Type, out var action);
-            action?.Invoke(msg.Data.ToString());
-            
-        }
-    }
-    #endregion
-
-    #region Receive Threads
     private void HandleClient(TcpClient client) // TCP
     {
         NetworkStream stream = client.GetStream();
@@ -131,88 +92,168 @@ public class Server
         {
             int byteCount = stream.Read(buffer, 0, buffer.Length);
             if (byteCount == 0) continue;
-            string data = Encoding.UTF8.GetString(buffer, 0, byteCount);
+            string message = Encoding.UTF8.GetString(buffer, 0, byteCount);
  
-            // Debug recieved data check
-            // Debug.Log($"[TCP] {data}");
+            // Debug recieved data
+            // Console.WriteLine($"[TCP] {client.Client.RemoteEndPoint} DATA: {message}");
 
             // Trim data if multiple messages in one
-            BaseMessage msg = Utils.TrimData(data);
-            actions.TryGetValue(msg.Type, out var action);
-            action?.Invoke(msg.Data.ToString());
+            BaseMessage msg = Utils.TrimData(message);
+            if(actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
         }
         
         DisconnectTcpClient(client);
     }
+    
+    private void UdpAcceptThread() // UDP
+    {
+        while(isRunning)
+        {
+            IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, port + 1); // IP any because those are clients
+
+            // Registration (add if need secure check)
+            int clientId = -16;
+            lock (lockObj)
+            {
+                // if(!tcpClients.ContainsKey(id)) // secure check
+                //     return;
+                // else udpClients[id] = endPoint;
+                if(!udpClients.ContainsValue(endPoint))
+                {
+                    clientId = nextClientId++;
+                    udpClients[clientId] = endPoint;
+                    Console.WriteLine($"[UDP] Client {endPoint} connected.");
+                }
+                else {
+                    clientId = udpClients.FirstOrDefault(x => x.Value.Equals(endPoint)).Key;
+                    Console.WriteLine($"[UDP] Client {endPoint} already connected.");
+                }
+            }
+
+            byte[] data = udpListener.Receive(ref endPoint);
+            string message = Encoding.UTF8.GetString(data);
+
+            // Debug recieved data
+            // Console.WriteLine($"[UDP] {endPoint} DATA: {message}");
+
+            // Trim data if multiple messages in one
+            BaseMessage msg = Utils.TrimData(message);
+            if(actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
+
+            // Broadcast TODO: 
+            // BroadcastUDP(data, clientId);
+        }
+    }
     #endregion
 
     #region Sending
-    private void BroadcastTCP(string message)
+    private void BroadcastTCP(string type, object message)
     {
-        message += "\n";
-        byte[] data = Encoding.UTF8.GetBytes(message);
+        string data = Utils.CreateMessage(type, message);
+        data += "\n";
+        byte[] buffer = Encoding.UTF8.GetBytes(data);
         lock (lockObj)
         {
             foreach (TcpClient client in tcpClients.Values)
-                client.GetStream().Write(data, 0, data.Length);
+                client.GetStream().Write(buffer, 0, buffer.Length);
         }
     }
 
     // Send data to specific connected client
-    private void DirectTcp(string data, TcpClient client)
-    {
-        data += "\n";
-        byte[] buffer = Encoding.UTF8.GetBytes(data);
-        lock(tcpClients)
-        {
-            try{
-                NetworkStream stream = client.GetStream();
-                stream.Write(buffer, 0, buffer.Length);
-            }
-            catch{}
-        }
-    }
+    // private void DirectTcp(string data, TcpClient client) // TODO
+    // {
+    //     data += "\n";
+    //     byte[] buffer = Encoding.UTF8.GetBytes(data);
+    //     lock(tcpClients)
+    //     {
+    //         try{
+    //             NetworkStream stream = client.GetStream();
+    //             stream.Write(buffer, 0, buffer.Length);
+    //         }
+    //         catch{}
+    //     }
+    // }
     
-    // TODO: UDP
-    private void BroadcastUDP(byte[] data, int senderId)
+    private void BroadcastUDP(byte[] buffer, int senderId)
     {
         lock (lockObj)
         {
             foreach (var entry in udpClients)
             {
                 // if (entry.Key != senderId)
-                    udpListener.Send(data, data.Length, entry.Value);
+                    udpListener.Send(buffer, buffer.Length, entry.Value);
             }
         }
     }
+    // private void BroadcastUDP(string type, object message, int senderId)
+    // {
+    //     string data = Utils.CreateMessage(type, message);
+    //     data += "\n";
+    //     byte[] buffer = Encoding.UTF8.GetBytes(data);
+    //     lock (lockObj)
+    //     {
+    //         foreach (var entry in udpClients)
+    //         {
+    //             // if (entry.Key != senderId)
+    //                 udpListener.Send(buffer, buffer.Length, entry.Value);
+    //         }
+    //     }
+    // }
+
+    // private void DirectUDP
+
     #endregion
 
     #region Functions
     private void DisconnectTcpClient(TcpClient client)
     {
-        try{
-            if(client.Connected) 
+        if (client == null || !client.Connected) return;
+
+        int clientId;
+        
+        // Remove from dictionary first to avoid accessing a closed socket
+        lock (lockObj)
+        {
+            clientId = tcpClients.FirstOrDefault(x => x.Value.Equals(client)).Key;
+
+            if (clientId == 0) // Key not found (assuming client IDs are positive)
             {
-                client.Client.Shutdown(SocketShutdown.Both);
-
-                var keyToRemove = tcpClients.FirstOrDefault(x => x.Value.Equals(client)).Key;
-                tcpClients.Remove(keyToRemove); // TODO: Remove client
-
-                // client.GetStream().Close();
-                Console.WriteLine($"[LOG] Client {client.Client.RemoteEndPoint} disconnected!");
-                client.Close();
+                Console.WriteLine($"[TCP] Attempted to disconnect unknown client.");
+                return;
             }
+
+            tcpClients.Remove(clientId);
         }
-        catch(Exception e){
-            Console.WriteLine("[ERR] TCP Disconnect: " + e);
+
+        Console.WriteLine($"[TCP] Client {client.Client.RemoteEndPoint} (ID: {clientId}) disconnecting...");
+
+        try
+        {
+            client.Client.Shutdown(SocketShutdown.Both);
+            client.Close();
         }
+        catch (Exception e)
+        {
+            Console.WriteLine($"[ERR] Error disconnecting client {client.Client.RemoteEndPoint}: {e.Message}");
+        }
+
+        Console.WriteLine($"[TCP] Client {client.Client.RemoteEndPoint} (ID: {clientId}) disconnected.");
     }
+
     private void DisconnectUdpClient(IPEndPoint clientEndPoint)
     {
-        int keyToRemove = udpClients.FirstOrDefault(x => x.Value.Equals(clientEndPoint)).Key;
-        if (udpClients.Remove(keyToRemove))
+        lock (lockObj) // Ensure thread safety
         {
-            Console.WriteLine($"Client {clientEndPoint} disconnected.");
+            if (udpClients.ContainsValue(clientEndPoint))
+            {
+                int keyToRemove = udpClients.FirstOrDefault(x => x.Value.Equals(clientEndPoint)).Key;
+                udpClients.Remove(keyToRemove);
+                Console.WriteLine($"[UDP] Client {clientEndPoint} disconnected.");
+            }
+            else
+            {
+                Console.WriteLine($"[UDP] Attempted to disconnect non-existent client: {clientEndPoint}");
+            }
         }
     }
 
@@ -221,18 +262,22 @@ public class Server
         actions = new Dictionary<string, Action<string>>
         {
             { "LOG", Log },
-            // { "CONNECT", Connect },
-            // { "DISCONNECT", Disconnect },
-            // { "UPDATEPLAYER", UpdatePlayer },
-            // { "RPC", Rpc }
+            // { "UDP_LOG", UdpLog },
         };
     }
     
     private void Log(string data)
     {
-        Log obj = Utils.Desirialize<Log>(data);
+        var obj = Utils.Deserialize<Log>(data);
         Console.WriteLine($"[LOG] {obj.message}");
     }
+    
+    // private void UdpLog(string data)
+    // {
+    //     var obj = Utils.Deserialize<Log>(data);
+    //     Console.WriteLine($"[LOG] {obj.message}");
+    //     BroadcastUDP("LOG", new Log(obj.message), -1);
+    // }
     #endregion
 
 }
