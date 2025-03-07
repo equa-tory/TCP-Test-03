@@ -56,7 +56,7 @@ public class Client : MonoBehaviour
             {
                 stream = tcpClient.GetStream();
                 isConnected = true;
-                Debug.Log($"[LOG] Connected to server {ip}:{port}!");
+                Debug.Log($"Connected to server {ip}:{port}!");
 
                 // TCP start recieve
                 Task t = new Task(ReceiveTCP);
