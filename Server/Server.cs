@@ -268,7 +268,7 @@ public class Server
         actions = new Dictionary<string, Action<string>>
         {
             { "LOG", Log },
-            // { "UDP_LOG", UdpLog },
+            { "RPC", RPC },
         };
     }
     
@@ -278,12 +278,12 @@ public class Server
         Console.WriteLine($"[LOG] {obj.message}");
     }
     
-    // private void UdpLog(string data)
-    // {
-    //     var obj = Utils.Deserialize<Log>(data);
-    //     Console.WriteLine($"[LOG] {obj.message}");
-    //     BroadcastUDP("LOG", new Log(obj.message), -1);
-    // }
+    private void RPC(string data)
+    {
+        var obj = Utils.Deserialize<RPC>(data);
+        Console.WriteLine($"[RPC] {obj.methodName} {obj.data}");
+        BroadcastTCP("RPC", new RPC(obj.methodName, obj.data));
+    }
     #endregion
 
 }

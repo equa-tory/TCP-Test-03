@@ -32,7 +32,7 @@ public class Client : MonoBehaviour
         if(Input.GetKeyDown(KeyCode.T))
             TCP("LOG", new Log("tcp test"));
         if(Input.GetKey(KeyCode.U))
-            UDP("LOG", new Log("udp test")); 
+            UDP("LOG", new Log("udp test"));
     }
     public async void Init()
     {
@@ -160,7 +160,7 @@ public class Client : MonoBehaviour
         }
     }
 
-    private void UDP(string type, object message)
+    public void UDP(string type, object message)
     {
         string data = Utils.CreateMessage(type, message);
         data += "\n";
@@ -175,6 +175,7 @@ public class Client : MonoBehaviour
         actions = new Dictionary<string, Action<string>>
         {
             { "LOG", Log },
+            { "RPC", RPC },
         };
     }
 
@@ -182,6 +183,12 @@ public class Client : MonoBehaviour
     {
         var obj = Utils.Deserialize<Log>(data);
         Debug.LogError($"[LOG] {obj.message}"); // Error for show up in dev build ver
+    }
+
+    private void RPC(string data)
+    {
+        var obj = Utils.Deserialize<RPC>(data);
+        RpcHandler.Instance.InvokeRPC(obj);
     }
 
     #endregion
