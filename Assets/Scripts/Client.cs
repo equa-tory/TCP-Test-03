@@ -31,7 +31,7 @@ public class Client : MonoBehaviour
     void Update() {
         if(Input.GetKeyDown(KeyCode.T))
             TCP("LOG", new Log("tcp test"));
-        if(Input.GetKeyDown(KeyCode.U))
+        if(Input.GetKey(KeyCode.U))
             UDP("LOG", new Log("udp test")); 
     }
     public async void Init()
@@ -66,6 +66,7 @@ public class Client : MonoBehaviour
                 udpClient = new UdpClient();
                 udpClient.Connect(IPAddress.Parse(ip), port + 1);
                 udpClient.BeginReceive(new AsyncCallback(ReceiveUDP), null);
+                UDP("Login", " "); // Blank msg for udp login on server otherwise client could not recieve UDP
                 return true;
             }
             else {
@@ -180,7 +181,7 @@ public class Client : MonoBehaviour
     private void Log(string data)
     {
         var obj = Utils.Deserialize<Log>(data);
-        Debug.Log($"[LOG] {obj.message}");
+        Debug.LogError($"[LOG] {obj.message}"); // Error for show up in dev build ver
     }
 
     #endregion

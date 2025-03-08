@@ -144,7 +144,7 @@ public class Server
             string message = Encoding.UTF8.GetString(data);
 
             // Debug recieved data
-            Console.WriteLine($"[UDP] {endPoint} DATA: {message}");
+            // Console.WriteLine($"[UDP] {endPoint} DATA: {message}");
 
             // Trim data if multiple messages in one
             BaseMessage msg = Utils.TrimData(message);
