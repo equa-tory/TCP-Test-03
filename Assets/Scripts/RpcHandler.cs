@@ -45,16 +45,25 @@ public class RpcHandler : MonoBehaviour
                 if (method != null && method.GetCustomAttribute<RPCAttribute>() != null)
                 {
                     var ps = method.GetParameters();
-                    var pType = ps[0].ParameterType;
 
                     // if method has no parameters
                     if (ps.Length == 0) method.Invoke(mbs[i], null);
-                    else {                        
+                    else
+                    {
+                        var pType = ps[0].ParameterType;
+
+                        // if data is null
+                        if (rpc.data == null)
+                        {
+                            method.Invoke(mbs[i], new object[] { null });
+                        }
                         // if data is string
-                        if(pType == typeof(string)) {
+                        else if (pType == typeof(string))
+                        {
                             method.Invoke(mbs[i], new[] { rpc.data.Trim('\"') });
                         }
-                        else {
+                        else
+                        {
                             method.Invoke(mbs[i], new[] { JsonUtility.FromJson(rpc.data, pType) });
                         }
                     }
