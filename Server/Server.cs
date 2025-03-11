@@ -297,8 +297,8 @@ public class Server
         var obj = Utils.Deserialize<ViewData>(data);
         views[obj.id] = obj;
         // Console.WriteLine($"vsc: {views.Count}");
-        Console.WriteLine($"----");
-        foreach(var v in views) Console.WriteLine($"View: {v.Key} {v.Value.posX}");
+        // Console.WriteLine($"----");
+        // foreach(var v in views) Console.WriteLine($"View: {v.Key} {v.Value.posX}");
         BroadcastUDP("VIEWS_UPD", views);
     }
     #endregion

@@ -27,6 +27,7 @@ public class Client : MonoBehaviour
 
     private static readonly ConcurrentQueue<Action> mainThreadQueue = new ConcurrentQueue<Action>();
     Dictionary<string, Action<string>> actions = new Dictionary<string, Action<string>>();
+    Dictionary<string, ViewData> viewsData = new Dictionary<string, ViewData>();
     Dictionary<string, View> views = new Dictionary<string, View>();
     #endregion
     //--------------------------------------------------------------------------------------------
@@ -34,6 +35,58 @@ public class Client : MonoBehaviour
     private void Awake() => Init(); // TODO: via bootstrap
     void Update() {
         while (mainThreadQueue.TryDequeue(out Action action)) action?.Invoke();
+
+        // Views logic
+        foreach (var pair in viewsData)
+        {
+            if (!views.ContainsKey(pair.Key)) // Spawn
+            {
+                print($"views has no {pair.Key}, adding...");
+
+                // ✅ Immediately add a placeholder to prevent duplicates
+                views[pair.Key] = null; // Temporary null to block duplicates
+
+                RunOnMainThread(() =>
+                {
+                    try
+                    {
+                        // Debugging the path to ensure it's correct
+                        print($"Attempting to load prefab at: {pair.Value.path}");
+                        GameObject tmp = Resources.Load<GameObject>(pair.Value.path);
+
+                        if (tmp == null)
+                        {
+                            Debug.LogError($"Failed to load prefab at {pair.Value.path}");
+                            return; // Exit if prefab not found
+                        }
+
+                        GameObject instantiatedObj = Instantiate(tmp, Vector3.zero, Quaternion.identity);
+                        View view = instantiatedObj.GetComponent<View>();
+
+                        if (view != null)
+                        {
+                            view.Init(pair.Value);
+                            views[pair.Key] = view;
+                            print($"Successfully instantiated {pair.Value.path}");
+                        }
+                        else
+                        {
+                            Debug.LogError($"Prefab at {pair.Value.path} does not contain a View component");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"Exception while instantiating prefab at {pair.Value.path}: {e}");
+                        views.Remove(pair.Key); // Cleanup if instantiation fails
+                    }
+                });
+            }
+            else if (pair.Key.Split('_')[0] != $"{GetID()}") // Update
+            {
+                // ✅ Update existing view data
+                views[pair.Key].data = pair.Value;
+            }
+        }
 
         if(Input.GetKeyDown(KeyCode.T))
             TCP("LOG", new Log("tcp test"));
@@ -225,59 +278,10 @@ public class Client : MonoBehaviour
         print($"Received {obj.Count} objects");
 
         // Debug: Print existing views
-        foreach (var pair in views) 
-            print($"Existing: {pair.Key} {pair.Value.data.id}");
+        // foreach (var pair in views) 
+            // print($"Existing: {pair.Key} {pair.Value.data.id}");
 
-        foreach (var pair in obj)
-        {
-            if (!views.ContainsKey(pair.Key)) // Spawn
-            {
-                print($"views has no {pair.Key}, adding...");
-
-                // ✅ Immediately add a placeholder to prevent duplicates
-                views[pair.Key] = null; // Temporary null to block duplicates
-
-                RunOnMainThread(() =>
-                {
-                    try
-                    {
-                        // Debugging the path to ensure it's correct
-                        print($"Attempting to load prefab at: {pair.Value.path}");
-                        GameObject tmp = Resources.Load<GameObject>(pair.Value.path);
-
-                        if (tmp == null)
-                        {
-                            Debug.LogError($"Failed to load prefab at {pair.Value.path}");
-                            return; // Exit if prefab not found
-                        }
-
-                        GameObject instantiatedObj = Instantiate(tmp, Vector3.zero, Quaternion.identity);
-                        View view = instantiatedObj.GetComponent<View>();
-
-                        if (view != null)
-                        {
-                            view.Init(pair.Value);
-                            views[pair.Key] = view;
-                            print($"Successfully instantiated {pair.Value.path}");
-                        }
-                        else
-                        {
-                            Debug.LogError($"Prefab at {pair.Value.path} does not contain a View component");
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        Debug.LogError($"Exception while instantiating prefab at {pair.Value.path}: {e}");
-                        views.Remove(pair.Key); // Cleanup if instantiation fails
-                    }
-                });
-            }
-            else if (pair.Key.Split('_')[0] != $"{GetID()}") // Update
-            {
-                // ✅ Update existing view data
-                views[pair.Key].data = pair.Value;
-            }
-        }
+        viewsData = obj;
     }
 
     #endregion
