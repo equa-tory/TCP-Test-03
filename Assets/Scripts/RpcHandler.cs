@@ -81,4 +81,5 @@ public class RpcHandler : MonoBehaviour
         string param = data is string strData ? $"\"{strData}\"" : JsonUtility.ToJson(data);
         Client.Instance.TCP("RPC", new RPC(methodName, param));
     }
+
 }

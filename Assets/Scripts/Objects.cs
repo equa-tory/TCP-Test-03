@@ -1,5 +1,4 @@
 using Newtonsoft.Json;
-using System.Collections.Generic;
 using System;
 
 #if UNITY
@@ -73,30 +72,6 @@ public class Log
     public string message { get; set; }
 }
 
-// public class PlayerData
-// {
-//     public PlayerData(int id, string name, float X=0, float Y=0, float Z=0, float rotX=0, float rotY=0, float rotZ=0)
-//     {
-//         this.id = id;
-//         this.name = name;
-//         this.X = X;
-//         this.Y = Y;
-//         this.Z = Z;
-//         this.rotX = rotX;
-//         this.rotY = rotY;
-//         this.rotZ = rotZ;
-//     }
-
-//     public int id { get; set; }
-//     public string name { get; set; }
-//     public float X { get; set; }
-//     public float Y { get; set; }
-//     public float Z { get; set; }
-//     public float rotX { get; set; }
-//     public float rotY { get; set; }
-//     public float rotZ { get; set; }
-// }
-
 public class RPC
 {
     public RPC(string methodName, string data = null)
@@ -107,4 +82,54 @@ public class RPC
 
     public string methodName { get; set; }
     public string data { get; set; }
+}
+
+public class ViewData
+{
+    public string id;
+    public string path;
+
+    public float posX;
+    public float posY;
+    public float posZ;
+    public float rotX;
+    public float rotY;
+    public float rotZ;
+    public float rotW;
+    public float scaleX;
+    public float scaleY;
+    public float scaleZ;
+
+    
+    public ViewData(string id, string path, UnityEngine.Vector3 pos, UnityEngine.Quaternion rot)
+    {
+        this.id = id;
+        this.path = path;
+        this.posX = pos.x;
+        this.posY = pos.y;
+        this.posZ = pos.z;
+        this.rotX = rot.x;
+        this.rotY = rot.y;
+        this.rotZ = rot.z;
+        this.rotW = rot.w;
+        this.scaleX = 1;
+        this.scaleY = 1;
+        this.scaleZ = 1;
+    }
+
+    public void UpdateData(UnityEngine.Transform tranform)
+    {
+        this.posX = tranform.position.x;
+        this.posY = tranform.position.y;
+        this.posZ = tranform.position.z;
+        this.rotX = tranform.rotation.x;
+        this.rotY = tranform.rotation.y;
+        this.rotZ = tranform.rotation.z;
+        this.rotW = tranform.rotation.w;
+        this.scaleX = tranform.localScale.x;
+        this.scaleY = tranform.localScale.y;
+        this.scaleZ = tranform.localScale.z;
+    }
+    
+
 }

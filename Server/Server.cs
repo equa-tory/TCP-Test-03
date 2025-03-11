@@ -25,6 +25,7 @@ public class Server
     private object lockObj = new object();
 
     Dictionary<string, Action<string>> actions = new Dictionary<string, Action<string>>();
+    Dictionary<string, ViewData> views = new Dictionary<string, ViewData>();
 
     #endregion
     //--------------------------------------------------------------------------------------------
@@ -77,7 +78,7 @@ public class Server
 
             Console.WriteLine($"[TCP] Connection from {client.Client.RemoteEndPoint}");
 
-            // DirectTcp(Utils.CreateMessage("ID", clientId), client); // Send ID for UDP secure check
+            DirectTCP("CLID", clientId, client); // Send ID for UDP secure check
 
             Thread thread = new Thread(() => HandleClient(client));
             thread.Start();
@@ -87,7 +88,7 @@ public class Server
     private void HandleClient(TcpClient client) // TCP
     {
         NetworkStream stream = client.GetStream();
-        byte[] buffer = new byte[1024];
+        byte[] buffer = new byte[4096];
 
         try
         {
@@ -101,6 +102,10 @@ public class Server
                 }
 
                 string message = Encoding.UTF8.GetString(buffer, 0, byteCount);
+
+                // Debug recieved data
+                // Console.WriteLine($"[TCP] {client.Client.RemoteEndPoint} DATA: {message}");
+
                 BaseMessage msg = Utils.TrimData(message);
                 if (actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
             }
@@ -170,19 +175,20 @@ public class Server
     }
 
     // Send data to specific connected client
-    // private void DirectTcp(string data, TcpClient client) // TODO
-    // {
-    //     data += "\n";
-    //     byte[] buffer = Encoding.UTF8.GetBytes(data);
-    //     lock(tcpClients)
-    //     {
-    //         try{
-    //             NetworkStream stream = client.GetStream();
-    //             stream.Write(buffer, 0, buffer.Length);
-    //         }
-    //         catch{}
-    //     }
-    // }
+    private void DirectTCP(string type, object message, TcpClient client) // TODO
+    {
+        string data = Utils.CreateMessage(type, message);
+        data += "\n";
+        byte[] buffer = Encoding.UTF8.GetBytes(data);
+        lock(tcpClients)
+        {
+            try{
+                NetworkStream stream = client.GetStream();
+                stream.Write(buffer, 0, buffer.Length);
+            }
+            catch{}
+        }
+    }
     
     private void BroadcastUDP(byte[] buffer, int senderId)
     {
@@ -195,20 +201,20 @@ public class Server
             }
         }
     }
-    // private void BroadcastUDP(string type, object message, int senderId)
-    // {
-    //     string data = Utils.CreateMessage(type, message);
-    //     data += "\n";
-    //     byte[] buffer = Encoding.UTF8.GetBytes(data);
-    //     lock (lockObj)
-    //     {
-    //         foreach (var entry in udpClients)
-    //         {
-    //             // if (entry.Key != senderId)
-    //                 udpListener.Send(buffer, buffer.Length, entry.Value);
-    //         }
-    //     }
-    // }
+    private void BroadcastUDP(string type, object message, int senderId = -16)
+    {
+        string data = Utils.CreateMessage(type, message);
+        data += "\n";
+        byte[] buffer = Encoding.UTF8.GetBytes(data);
+        lock (lockObj)
+        {
+            foreach (var entry in udpClients)
+            {
+                // if (entry.Key != senderId)
+                    udpListener.Send(buffer, buffer.Length, entry.Value);
+            }
+        }
+    }
 
     // private void DirectUDP
 
@@ -269,6 +275,7 @@ public class Server
         {
             { "LOG", Log },
             { "RPC", RPC },
+            { "VIEW_UPD", ViewUpdate },
         };
     }
     
@@ -283,6 +290,16 @@ public class Server
         var obj = Utils.Deserialize<RPC>(data);
         Console.WriteLine($"[RPC] {obj.methodName} {obj.data}");
         BroadcastTCP("RPC", new RPC(obj.methodName, obj.data));
+    }
+ 
+    private void ViewUpdate(string data)
+    {
+        var obj = Utils.Deserialize<ViewData>(data);
+        views[obj.id] = obj;
+        // Console.WriteLine($"vsc: {views.Count}");
+        Console.WriteLine($"----");
+        foreach(var v in views) Console.WriteLine($"View: {v.Key} {v.Value.posX}");
+        BroadcastUDP("VIEWS_UPD", views);
     }
     #endregion
 
