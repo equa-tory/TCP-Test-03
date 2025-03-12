@@ -29,9 +29,9 @@ public static class Utils
             return default(T);
         }
     }
-    public static string CreateMessage(string type, object message)
+    public static string CreateMessage(int id, string type, object message)
     {
-        return Serialize(new BaseMessage(type, message));
+        return Serialize(new BaseMessage(id, type, message));
     }
 
     public static BaseMessage TrimData(string data)
@@ -50,12 +50,14 @@ public static class Utils
 
 public class BaseMessage
 {
-    public BaseMessage(string type, object message) 
+    public BaseMessage(int id, string type, object message) 
     {
+        this.ID = id;
         this.Type = type;
         this.Data = message;
     }
 
+    public int ID { get; set; }
     public string Type { get; set; }
     public object Data { get; set; }
 }

@@ -76,7 +76,7 @@ public class Server
             int clientId;
             lock (lockObj) { clientId = nextClientId++; tcpClients[clientId] = client; }
 
-            Console.WriteLine($"[TCP] Connection from {client.Client.RemoteEndPoint}");
+            Console.WriteLine($"[TCP] Connection from {client.Client.RemoteEndPoint}. ID: {clientId}");
 
             DirectTCP("CLID", clientId, client); // Send ID for UDP secure check
 
@@ -107,7 +107,23 @@ public class Server
                 // Console.WriteLine($"[TCP] {client.Client.RemoteEndPoint} DATA: {message}");
 
                 BaseMessage msg = Utils.TrimData(message);
-                if (actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
+
+                // Secure Check
+                int clientId = msg.ID;
+                lock (lockObj)
+                {
+                    if (tcpClients.TryGetValue(clientId, out var existingClient))
+                    {
+                        if (!existingClient.Equals(client)) 
+                        {
+                            Console.WriteLine($"[ALERT, TCP] !!! ATTEMPT TO SEND UDP WITH SPOOFED ID {clientId} from {client.Client.RemoteEndPoint} (Expected: {existingClient.Client.RemoteEndPoint}) !!!");
+                            continue; // Secure Check: Ignore spoofing attempts
+                        }
+                    }
+                }
+
+                try { if (actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
+                } catch {}
             }
         }
         catch (Exception ex)
@@ -126,26 +142,6 @@ public class Server
         {
             IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, port + 1); // IP any because those are clients
             byte[] data = udpListener.Receive(ref endPoint); // have to be here or server connects to itself
-
-            // Registration (add if need secure check)
-            int clientId = -16; // Can be removed and Broadcast via recieved UDP functions
-            lock (lockObj)
-            {
-                // if(!tcpClients.ContainsKey(id)) // secure check
-                //     return;
-                // else udpClients[id] = endPoint;
-                if(!udpClients.ContainsValue(endPoint))
-                {
-                    clientId = nextClientId++;
-                    udpClients[clientId] = endPoint;
-                    Console.WriteLine($"[UDP] Client {endPoint} connected.");
-                }
-                else {
-                    clientId = udpClients.FirstOrDefault(x => x.Value.Equals(endPoint)).Key;
-                    // Console.WriteLine($"[UDP] Client {endPoint} already connected.");
-                }
-            }
-
             string message = Encoding.UTF8.GetString(data);
 
             // Debug recieved data
@@ -153,6 +149,32 @@ public class Server
 
             // Trim data if multiple messages in one
             BaseMessage msg = Utils.TrimData(message);
+
+            // Registration + secure check
+            int clientId = msg.ID;
+            lock (lockObj)
+            {
+                if (!tcpClients.TryGetValue(clientId, out var tcpClient))
+                {
+                    Console.WriteLine($"[WRN] UDP packet from unknown client ID {clientId}. Ignoring...");
+                    continue; // Secure Check 1: Ignore if client does not exist in TCP list
+                }
+
+                if (udpClients.TryGetValue(clientId, out var existingEndPoint))
+                {
+                    if (!existingEndPoint.Equals(endPoint)) 
+                    {
+                        Console.WriteLine($"[ALERT, UDP] !!! ATTEMPT TO SEND UDP WITH SPOOFED ID {clientId} from {endPoint} (Expected: {existingEndPoint}) !!!");
+                        continue; // Secure Check 2: Ignore spoofing attempts
+                    }
+                }
+                else
+                {
+                    udpClients[clientId] = endPoint;
+                    Console.WriteLine($"[UDP] Client {endPoint} connected. ID: {clientId}");
+                }
+            }
+
             if(actions.TryGetValue(msg.Type, out var action)) action?.Invoke(msg.Data.ToString());
 
             // Broadcast TODO: 
@@ -164,7 +186,7 @@ public class Server
     #region Sending
     private void BroadcastTCP(string type, object message)
     {
-        string data = Utils.CreateMessage(type, message);
+        string data = Utils.CreateMessage(-16, type, message);
         data += "\n";
         byte[] buffer = Encoding.UTF8.GetBytes(data);
         lock (lockObj)
@@ -177,7 +199,7 @@ public class Server
     // Send data to specific connected client
     private void DirectTCP(string type, object message, TcpClient client) // TODO
     {
-        string data = Utils.CreateMessage(type, message);
+        string data = Utils.CreateMessage(-16, type, message);
         data += "\n";
         byte[] buffer = Encoding.UTF8.GetBytes(data);
         lock(tcpClients)
@@ -203,7 +225,7 @@ public class Server
     }
     private void BroadcastUDP(string type, object message, int senderId = -16)
     {
-        string data = Utils.CreateMessage(type, message);
+        string data = Utils.CreateMessage(-16, type, message);
         data += "\n";
         byte[] buffer = Encoding.UTF8.GetBytes(data);
         lock (lockObj)
@@ -229,6 +251,13 @@ public class Server
         lock (lockObj)
         {
             clientId = tcpClients.FirstOrDefault(x => x.Value.Equals(client)).Key;
+            foreach(var view in views) // Remove views
+            {
+                if (view.Key.Split('_')[0] == clientId.ToString())
+                {
+                    views.Remove(view.Key);
+                }
+            }
             if (clientId == 0)
             {
                 Console.WriteLine($"[TCP] Attempted to disconnect unknown client.");
@@ -276,6 +305,7 @@ public class Server
             { "LOG", Log },
             { "RPC", RPC },
             { "VIEW_UPD", ViewUpdate },
+            { "VIEW_DEL", ViewDelete },
         };
     }
     
@@ -296,10 +326,14 @@ public class Server
     {
         var obj = Utils.Deserialize<ViewData>(data);
         views[obj.id] = obj;
-        // Console.WriteLine($"vsc: {views.Count}");
-        // Console.WriteLine($"----");
-        // foreach(var v in views) Console.WriteLine($"View: {v.Key} {v.Value.posX}");
         BroadcastUDP("VIEWS_UPD", views);
+    }
+
+    private void ViewDelete(string data)
+    {
+        var obj = Utils.Deserialize<ViewData>(data);
+        views.Remove(obj.id);
+        BroadcastUDP("VIEWS_UPD", views);    
     }
     #endregion
 

@@ -5,7 +5,8 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
-using System.Collections.Concurrent; // For thread-safe queue
+using System.Collections.Concurrent;
+using System.Threading; // For thread-safe queue
 
 public class Client : MonoBehaviour
 {
@@ -39,54 +40,64 @@ public class Client : MonoBehaviour
         // Views logic
         foreach (var pair in viewsData)
         {
-            if (!views.ContainsKey(pair.Key)) // Spawn
+            if (!views.ContainsKey(pair.Key)) // SPAWN
             {
-                print($"views has no {pair.Key}, adding...");
+                // print($"views has no {pair.Key}, adding...");
 
                 // ✅ Immediately add a placeholder to prevent duplicates
                 views[pair.Key] = null; // Temporary null to block duplicates
 
-                RunOnMainThread(() =>
-                {
+                // RunOnMainThread(() =>
+                // {
                     try
                     {
                         // Debugging the path to ensure it's correct
-                        print($"Attempting to load prefab at: {pair.Value.path}");
+                        // print($"Attempting to load prefab at: {pair.Value.path}");
                         GameObject tmp = Resources.Load<GameObject>(pair.Value.path);
 
-                        if (tmp == null)
-                        {
-                            Debug.LogError($"Failed to load prefab at {pair.Value.path}");
-                            return; // Exit if prefab not found
-                        }
+                        // if (tmp == null)
+                        // {
+                        //     Debug.LogError($"Failed to load prefab at {pair.Value.path}");
+                        //     return; // Exit if prefab not found
+                        // }
 
                         GameObject instantiatedObj = Instantiate(tmp, Vector3.zero, Quaternion.identity);
                         View view = instantiatedObj.GetComponent<View>();
 
-                        if (view != null)
-                        {
+                        // if (view != null)
+                        // {
                             view.Init(pair.Value);
                             views[pair.Key] = view;
-                            print($"Successfully instantiated {pair.Value.path}");
-                        }
-                        else
-                        {
-                            Debug.LogError($"Prefab at {pair.Value.path} does not contain a View component");
-                        }
+                            // print($"Successfully instantiated {pair.Value.path}");
+                        // }
+                        // else
+                        // {
+                        //     Debug.LogError($"Prefab at {pair.Value.path} does not contain a View component");
+                        // }
                     }
                     catch (Exception e)
                     {
                         Debug.LogError($"Exception while instantiating prefab at {pair.Value.path}: {e}");
                         views.Remove(pair.Key); // Cleanup if instantiation fails
                     }
-                });
+                // });
             }
-            else if (pair.Key.Split('_')[0] != $"{GetID()}") // Update
+            else if (pair.Key.Split('_')[0] != $"{GetID()}") // UPDATE
             {
                 // ✅ Update existing view data
                 views[pair.Key].data = pair.Value;
             }
         }
+        try{
+            foreach(var v in views) // can be err so using try-catch
+            {
+                if(!viewsData.ContainsKey(v.Key)) // REMOVE
+                {
+                    views.Remove(v.Key);
+                    Destroy(v.Value.gameObject);
+                }
+            }
+        } catch { }
 
         if(Input.GetKeyDown(KeyCode.T))
             TCP("LOG", new Log("tcp test"));
@@ -121,7 +132,9 @@ public class Client : MonoBehaviour
                 Task t = new Task(ReceiveTCP);
                 t.Start();
 
+                Thread.Sleep(500);
                 // UDP start recieve
+                if(clientId == 0) print("NO ID !!!");
                 udpClient = new UdpClient();
                 udpClient.Connect(IPAddress.Parse(ip), port + 1);
                 udpClient.BeginReceive(new AsyncCallback(ReceiveUDP), null);
@@ -183,7 +196,8 @@ public class Client : MonoBehaviour
     
     public void TCP(string type, object message)
     {
-        string data = Utils.CreateMessage(type, message);
+        if(clientId == 0) return;
+        string data = Utils.CreateMessage(1, type, message);
         data += "\n";
         byte[] buffer = Encoding.UTF8.GetBytes(data);
         stream.Write(buffer, 0, buffer.Length);
@@ -208,7 +222,7 @@ public class Client : MonoBehaviour
         udpClient.BeginReceive(new AsyncCallback(ReceiveUDP), null);
     }
 
-    private void UdpDisconnect()
+    private void UdpDisconnect() // TODO: 
     {
         // Udp("disconnect", localPlayer);
         try{
@@ -221,7 +235,8 @@ public class Client : MonoBehaviour
 
     public void UDP(string type, object message)
     {
-        string data = Utils.CreateMessage(type, message);
+        if(clientId == 0) return;
+        string data = Utils.CreateMessage(clientId, type, message);
         data += "\n";
         byte[] buffer = Encoding.UTF8.GetBytes(data);
         udpClient.Send(buffer, buffer.Length);
@@ -248,8 +263,8 @@ public class Client : MonoBehaviour
         actions = new Dictionary<string, Action<string>>
         {
             { "LOG", Log },
-            { "CLID", CLID },
             { "RPC", RPC },
+            { "CLID", CLID },
             { "VIEWS_UPD", ViewsUpdate },
         };
     }
@@ -260,27 +275,21 @@ public class Client : MonoBehaviour
         Debug.LogError($"[LOG] {obj.message}"); // Error for show up in dev build ver
     }
 
-    private void CLID(string data)
-    {
-        var obj = Utils.Deserialize<int>(data);
-        clientId = obj;
-    }
-
     private void RPC(string data)
     {
         var obj = Utils.Deserialize<RPC>(data);
         RpcHandler.Instance.InvokeRPC(obj);
     }
 
+    private void CLID(string data)
+    {
+        var obj = Utils.Deserialize<int>(data);
+        clientId = obj;
+    }
+
     private void ViewsUpdate(string data)
     {
         var obj = Utils.Deserialize<Dictionary<string, ViewData>>(data);
-        print($"Received {obj.Count} objects");
-
-        // Debug: Print existing views
-        // foreach (var pair in views) 
-            // print($"Existing: {pair.Key} {pair.Value.data.id}");
-
         viewsData = obj;
     }
 

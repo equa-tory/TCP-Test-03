@@ -1,10 +1,7 @@
 using Newtonsoft.Json;
-using System.Collections.Generic;
 using System;
-using System.Transactions;
-using System.Numerics;
 
-#if !UNITY_EDITOR
+#if UNITY
 namespace Server;
 #endif
 
@@ -32,9 +29,9 @@ public static class Utils
             return default(T);
         }
     }
-    public static string CreateMessage(string type, object message)
+    public static string CreateMessage(int id, string type, object message)
     {
-        return Serialize(new BaseMessage(type, message));
+        return Serialize(new BaseMessage(id, type, message));
     }
 
     public static BaseMessage TrimData(string data)
@@ -53,12 +50,14 @@ public static class Utils
 
 public class BaseMessage
 {
-    public BaseMessage(string type, object message) 
+    public BaseMessage(int id, string type, object message) 
     {
+        this.ID = id;
         this.Type = type;
         this.Data = message;
     }
 
+    public int ID { get; set; }
     public string Type { get; set; }
     public object Data { get; set; }
 }
@@ -102,37 +101,4 @@ public class ViewData
     public float scaleX;
     public float scaleY;
     public float scaleZ;
-
-    #if UNITY_EDITOR
-    public ViewData(string id, string path, UnityEngine.Vector3 pos, UnityEngine.Quaternion rot)
-    {
-        this.id = id;
-        this.path = path;
-        this.posX = pos.x;
-        this.posY = pos.y;
-        this.posZ = pos.z;
-        this.rotX = rot.x;
-        this.rotY = rot.y;
-        this.rotZ = rot.z;
-        this.rotW = rot.w;
-        this.scaleX = 1;
-        this.scaleY = 1;
-        this.scaleZ = 1;
-    }
-
-    public void UpdateData(UnityEngine.Transform tranform)
-    {
-        this.posX = tranform.position.x;
-        this.posY = tranform.position.y;
-        this.posZ = tranform.position.z;
-        this.rotX = tranform.rotation.x;
-        this.rotY = tranform.rotation.y;
-        this.rotZ = tranform.rotation.z;
-        this.rotW = tranform.rotation.w;
-        this.scaleX = tranform.localScale.x;
-        this.scaleY = tranform.localScale.y;
-        this.scaleZ = tranform.localScale.z;
-    }
-    
-    #endif
 }
